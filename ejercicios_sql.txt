@@ -1,0 +1,40 @@
+SELECT *
+FROM Genre;
+
+SELECT FirstName, LastName, Title
+FROM Employee;
+
+SELECT Name
+FROM Artist
+LIMIT 5;
+
+SELECT *
+FROM Track
+LIMIT 3;
+
+SELECT Name, Milliseconds
+FROM Track
+ORDER BY Milliseconds DESC
+LIMIT 5;
+
+SELECT FirstName, LastName
+FROM Customer
+ORDER BY LastName ASC, FirstName ASC
+LIMIT 10;
+
+SELECT FirstName, LastName, City
+FROM Customer
+WHERE Country = 'France';
+
+SELECT Name, UnitPrice
+FROM Track
+WHERE UnitPrice > 0.99
+LIMIT 5;
+
+SELECT FirstName AS Nombre, LastName AS Apellido
+FROM Employee;
+
+SELECT Name, Milliseconds / 60000.0 AS Minutos
+FROM Track
+LIMIT 5;
+
