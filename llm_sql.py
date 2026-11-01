@@ -1,6 +1,7 @@
 import os
 import re
 import sqlite3
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -16,6 +17,11 @@ MODELO = "gemini-3.8-flash"
 RUTA_BD = Path(__file__).parent / "chinook.db"
 # Cuántas veces como máximo se intenta que el modelo acierte con una consulta
 MAX_INTENTOS = 3
+
+# Códigos de la API que suelen ser pasajeros (picos de demanda o fallos momentáneos del servidor)
+CODIGOS_TEMPORALES = {500, 503, 504}
+# Intentos por llamada a la API; esperas de 2, 4 y 8 segundos entre ellos
+REINTENTOS_API = 4
 
 # Palabras que nunca deben aparecer en una consulta de solo lectura
 PALABRAS_PROHIBIDAS = [
@@ -46,7 +52,18 @@ def obtener_esquema():
 
 def consultar_modelo(prompt):
     """Envía un prompt a Gemini y devuelve el SQL limpio de formato markdown."""
-    respuesta = client.models.generate_content(model=MODELO, contents=prompt)
+    for intento in range(1, REINTENTOS_API + 1):
+        try:
+            respuesta = client.models.generate_content(model=MODELO, contents=prompt)
+            break
+        except genai_errors.APIError as e:
+            # Solo se reintenta si el error es temporal; el último fallo se propaga
+            if e.code not in CODIGOS_TEMPORALES or intento == REINTENTOS_API:
+                raise
+            espera = 2 ** intento
+            print(f"Pico de demanda en la API (código {e.code}). Reintentando en {espera} s...")
+            time.sleep(espera)
+
     if not respuesta.text:
         raise ValueError("El modelo no devolvió ningún texto.")
     sql = respuesta.text.strip()
@@ -136,7 +153,7 @@ def generar_y_ejecutar(pregunta, esquema):
         sql_valido = validar_sql(sql)
 
         try:
-            return ejecutar_sql(sql_valido)
+            return sql_valido, ejecutar_sql(sql_valido)
         except (sqlite3.Error, pd.errors.DatabaseError) as e:
             print(f"Error de SQLite: {e}\n")
             if intento == MAX_INTENTOS:
@@ -148,7 +165,7 @@ def responder(pregunta):
     print(f"\nPregunta: {pregunta}")
 
     try:
-        resultado = generar_y_ejecutar(pregunta, obtener_esquema())
+        _, resultado = generar_y_ejecutar(pregunta, obtener_esquema())
     except ValueError as e:
         print(f"Consulta rechazada: {e}")
         return None
